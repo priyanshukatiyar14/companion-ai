@@ -38,9 +38,15 @@ def supersede(conn, old_id: int, new_id: int):
     )
 
 
-def _topic(key: str) -> str:
-    base = key.split(":")[0]
-    return base.split("_")[0]
+# Words too generic to establish that two keys share a topic on their own
+# (e.g. without this, "job_status" and "relationship_status" would look like
+# the same topic just because both contain "status").
+_TOPIC_STOPWORDS = {"status", "of", "the", "a", "an", "current", "is", "state"}
+
+
+def _topic_words(key: str) -> set[str]:
+    base = key.split(":")[0].lower()
+    return {w for w in base.split("_") if w and w not in _TOPIC_STOPWORDS}
 
 
 def process_and_store_facts(session_id: str, turn: int, user_message: str) -> list[dict]:
@@ -79,7 +85,7 @@ def process_and_store_facts(session_id: str, turn: int, user_message: str) -> li
             # single update could only ever supersede one old fact even when
             # several were invalidated.
             key_prefix = key.split(":")[0]
-            topic = _topic(key)
+            topic_words = _topic_words(key)
             is_status_update = key_prefix.endswith("_status")
 
             candidates = conn.execute(
@@ -95,10 +101,12 @@ def process_and_store_facts(session_id: str, turn: int, user_message: str) -> li
 
                 # A "<topic>_status" fact (job_status, relationship_status, ...)
                 # is a definitive state change for that entity: other slot-type
-                # facts about the same topic (job_title, relationship_length, ...)
-                # are now stale even though their wording has nothing in common
-                # with the status update itself.
-                if is_status_update and ":" not in cand["fact_key"] and _topic(cand["fact_key"]) == topic:
+                # facts about the same topic (job_title, partner_length_of_
+                # relationship, ...) are now stale even though their wording
+                # has nothing in common with the status update itself. We
+                # match on shared topic words rather than exact key equality
+                # since extractors don't always name keys consistently.
+                if is_status_update and ":" not in cand["fact_key"] and topic_words & _topic_words(cand["fact_key"]):
                     supersede(conn, cand["id"], new_id)
                     continue
 

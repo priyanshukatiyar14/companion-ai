@@ -38,6 +38,11 @@ def supersede(conn, old_id: int, new_id: int):
     )
 
 
+def _topic(key: str) -> str:
+    base = key.split(":")[0]
+    return base.split("_")[0]
+
+
 def process_and_store_facts(session_id: str, turn: int, user_message: str) -> list[dict]:
     extracted = llm_extract_facts(user_message)
     stored = []
@@ -63,23 +68,43 @@ def process_and_store_facts(session_id: str, turn: int, user_message: str) -> li
 
             if existing is not None:
                 supersede(conn, existing["id"], new_id)
-            else:
-                key_prefix = key.split(":")[0]
 
-                candidates = conn.execute(
-                    "SELECT * FROM facts WHERE session_id=? AND status='active' AND id != ?",
-                    (session_id, new_id),
-                ).fetchall()
-                for cand in candidates:
-                    if cand["fact_key"] == key:
-                        continue
-                    cand_prefix = cand["fact_key"].split(":")[0]
-                    if ":" in key and ":" in cand["fact_key"] and cand_prefix == key_prefix:
-                        continue  # siblings under the same set-type key — not a contradiction
-                    sim = cosine_sim(vec, decode_embedding(cand["embedding"]))
-                    if sim >= CONTRADICTION_SIM_THRESHOLD:
-                        supersede(conn, cand["id"], new_id)
-                        break
+            # Tier 2: look for other active facts that this new fact invalidates,
+            # even when the key doesn't match exactly. This used to only run
+            # when there was no exact-key match, and only relied on embedding
+            # similarity — which misses cases like "job_status: quit" not
+            # being lexically/semantically close to "job_title: backend
+            # engineer" even though the status change makes the old title
+            # stale. It also stopped at the first match via `break`, so a
+            # single update could only ever supersede one old fact even when
+            # several were invalidated.
+            key_prefix = key.split(":")[0]
+            topic = _topic(key)
+            is_status_update = key_prefix.endswith("_status")
+
+            candidates = conn.execute(
+                "SELECT * FROM facts WHERE session_id=? AND status='active' AND id != ?",
+                (session_id, new_id),
+            ).fetchall()
+            for cand in candidates:
+                if cand["fact_key"] == key:
+                    continue
+                cand_prefix = cand["fact_key"].split(":")[0]
+                if ":" in key and ":" in cand["fact_key"] and cand_prefix == key_prefix:
+                    continue  # siblings under the same set-type key — not a contradiction
+
+                # A "<topic>_status" fact (job_status, relationship_status, ...)
+                # is a definitive state change for that entity: other slot-type
+                # facts about the same topic (job_title, relationship_length, ...)
+                # are now stale even though their wording has nothing in common
+                # with the status update itself.
+                if is_status_update and ":" not in cand["fact_key"] and _topic(cand["fact_key"]) == topic:
+                    supersede(conn, cand["id"], new_id)
+                    continue
+
+                sim = cosine_sim(vec, decode_embedding(cand["embedding"]))
+                if sim >= CONTRADICTION_SIM_THRESHOLD:
+                    supersede(conn, cand["id"], new_id)
 
             stored.append({"key": key, "value": value, "category": category})
 

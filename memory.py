@@ -5,6 +5,32 @@ from llm import embed, extract_facts as llm_extract_facts
 CONTRADICTION_SIM_THRESHOLD = 0.86  # cosine sim above this + different key -> ask LLM to judge
 RETRIEVAL_TOP_K = 6
 
+# Values too generic/uninformative to be allowed to overwrite a more specific
+# prior value. An extractor emitting one of these for an existing key is
+# treated as "couldn't determine it" rather than "here's the new truth" —
+# e.g. job_title going from "backend engineer" to "unknown" should not erase
+# the specific title.
+_GENERIC_VALUES = {
+    "unknown", "n/a", "na", "none", "unclear", "tbd", "not sure",
+    "not specified", "unspecified", "",
+}
+
+# Explicit map of "<topic>_status" key prefixes to the specific other key
+# prefixes they invalidate when they change. This replaces fuzzy topic-word
+# overlap, which was too blunt (e.g. any "job_*" key would get superseded by
+# job_status just for sharing the word "job", even keys like job_location
+# that a status change doesn't necessarily invalidate).
+#
+# Extend this table deliberately rather than relying on string heuristics —
+# if a new status key is introduced, decide explicitly what it invalidates.
+_STATUS_INVALIDATES = {
+    "job_status": ["job_title"],
+    "relationship_status": [],  # relationship_status is authoritative on its own;
+                                 # it does not by itself invalidate relationship_length
+                                 # (that's a historical fact about a past relationship).
+    "dietary_status": ["dietary_goal"],
+}
+
 
 def cosine_sim(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
@@ -38,14 +64,29 @@ def supersede(conn, old_id: int, new_id: int):
     )
 
 
+def _is_generic(value: str) -> bool:
+    return value.strip().lower() in _GENERIC_VALUES
+
+
 # Words too generic to establish that two keys share a topic on their own
 # (e.g. without this, "job_status" and "relationship_status" would look like
 # the same topic just because both contain "status").
 _TOPIC_STOPWORDS = {"status", "of", "the", "a", "an", "current", "is", "state"}
 
 
+def _key_prefix(key: str) -> str:
+    return key.split(":")[0]
+
+
+def _key_entity(key: str) -> str | None:
+    # For set-type keys like "pet_name:max", returns the entity id ("max").
+    # Returns None for simple keys with no entity component.
+    parts = key.split(":", 1)
+    return parts[1].lower() if len(parts) == 2 else None
+
+
 def _topic_words(key: str) -> set[str]:
-    base = key.split(":")[0].lower()
+    base = _key_prefix(key).lower()
     return {w for w in base.split("_") if w and w not in _TOPIC_STOPWORDS}
 
 
@@ -61,7 +102,12 @@ def process_and_store_facts(session_id: str, turn: int, user_message: str) -> li
 
             vec = embed(f"{key}: {value}")
 
-            # Tier 1: exact key match -> direct supersede.
+            # Tier 1: exact key match -> direct supersede, UNLESS the new
+            # value is too generic to responsibly overwrite a specific prior
+            # value (e.g. "unknown" replacing "backend engineer"). In that
+            # case we still record the generic fact for visibility, but we
+            # do NOT retire the old one, so retrieval keeps surfacing the
+            # more specific, still-plausible fact.
             existing = get_active_fact_by_key(conn, session_id, key)
 
             cur = conn.execute(
@@ -72,41 +118,56 @@ def process_and_store_facts(session_id: str, turn: int, user_message: str) -> li
             )
             new_id = cur.lastrowid
 
-            if existing is not None:
+            if existing is not None and not (_is_generic(value) and not _is_generic(existing["fact_value"])):
                 supersede(conn, existing["id"], new_id)
 
             # Tier 2: look for other active facts that this new fact invalidates,
-            # even when the key doesn't match exactly. This used to only run
-            # when there was no exact-key match, and only relied on embedding
-            # similarity — which misses cases like "job_status: quit" not
-            # being lexically/semantically close to "job_title: backend
-            # engineer" even though the status change makes the old title
-            # stale. It also stopped at the first match via `break`, so a
-            # single update could only ever supersede one old fact even when
-            # several were invalidated.
-            key_prefix = key.split(":")[0]
+            # even when the key doesn't match exactly.
+            #
+            # Only consider facts from strictly earlier turns. Facts inserted
+            # earlier in THIS SAME extraction batch (same turn) are visible in
+            # the table already since each insert commits immediately, but a
+            # sibling fact from the same message should not be able to
+            # supersede another sibling fact from that same message purely
+            # because of insert order — e.g. "job_title: fintech" and
+            # "job_status:quit: yes" extracted from one message shouldn't
+            # race to invalidate each other.
+            key_prefix = _key_prefix(key)
+            key_entity = _key_entity(key)
             topic_words = _topic_words(key)
             is_status_update = key_prefix.endswith("_status")
+            invalidates = _STATUS_INVALIDATES.get(key_prefix, [])
 
             candidates = conn.execute(
-                "SELECT * FROM facts WHERE session_id=? AND status='active' AND id != ?",
-                (session_id, new_id),
+                """SELECT * FROM facts
+                   WHERE session_id=? AND status='active' AND id != ? AND source_turn < ?""",
+                (session_id, new_id, turn),
             ).fetchall()
             for cand in candidates:
-                if cand["fact_key"] == key:
+                cand_key = cand["fact_key"]
+                if cand_key == key:
                     continue
-                cand_prefix = cand["fact_key"].split(":")[0]
-                if ":" in key and ":" in cand["fact_key"] and cand_prefix == key_prefix:
+                cand_prefix = _key_prefix(cand_key)
+                cand_entity = _key_entity(cand_key)
+
+                if ":" in key and ":" in cand_key and cand_prefix == key_prefix:
                     continue  # siblings under the same set-type key — not a contradiction
 
-                # A "<topic>_status" fact (job_status, relationship_status, ...)
-                # is a definitive state change for that entity: other slot-type
-                # facts about the same topic (job_title, partner_length_of_
-                # relationship, ...) are now stale even though their wording
-                # has nothing in common with the status update itself. We
-                # match on shared topic words rather than exact key equality
-                # since extractors don't always name keys consistently.
-                if is_status_update and ":" not in cand["fact_key"] and topic_words & _topic_words(cand["fact_key"]):
+                if key_entity is not None and cand_entity == key_entity and cand_prefix != key_prefix:
+                    # Same entity, different attribute (e.g. pet_name:max vs
+                    # pet_type:max). These describe different facets of the
+                    # same thing and should never be silently superseded by
+                    # each other just because their embedded text happens to
+                    # be similar (e.g. both extracted as "golden retriever").
+                    # If one of them is actually mislabeled, that's an
+                    # extraction bug to fix upstream, not something this
+                    # layer should paper over by deleting data.
+                    continue
+
+                # Explicit status-invalidation: a "<topic>_status" fact is a
+                # definitive state change for specific, named keys only —
+                # not anything that merely shares a topic word.
+                if is_status_update and cand_prefix in invalidates:
                     supersede(conn, cand["id"], new_id)
                     continue
 

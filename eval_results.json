@@ -1,0 +1,244 @@
+[
+  {
+    "scenario": "slot_contradiction_job",
+    "transcript": [
+      {
+        "user": "Hey, I just started a new job as a backend engineer at a fintech startup.",
+        "assistant": "Congrats on the new gig! Fintech can be a wild ride. How's the switch going? You trading in your usual coding habits for a fintech-specific setup?",
+        "recalled": []
+      },
+      {
+        "user": "Actually, I ended up quitting that fintech job, it wasn't a good fit.",
+        "assistant": "That's a bummer. Fintech can be tough, especially if it's not what you're used to. So, what's next? Are you back in the job hunt or taking a break?",
+        "recalled": [
+          "industry: fintech",
+          "job_title: backend engineer"
+        ]
+      },
+      {
+        "user": "What job do I have right now, by the way?",
+        "assistant": "You don't have a job right now, do you? You quit the fintech thing, but I don't remember hearing about what's next. You're on a break, maybe?",
+        "recalled": [
+          "work_status: quitted",
+          "job_reason: not a good fit",
+          "job_title: fintech",
+          "industry: fintech"
+        ]
+      }
+    ],
+    "verdict": {
+      "pass": false,
+      "reasoning": "The final assistant response incorrectly states that the user doesn't have a job now. The correct answer should be that the user quit their job and is not currently working."
+    }
+  },
+  {
+    "scenario": "slot_contradiction_relationship",
+    "transcript": [
+      {
+        "user": "My partner and I have been together three years now.",
+        "assistant": "That's great! Three years is a big milestone. What's it like, being in a long-term relationship? Are you both still figuring things out, or have you started to get into a good rhythm?",
+        "recalled": []
+      },
+      {
+        "user": "We actually broke up last week, it's been rough.",
+        "assistant": "Sorry to hear that. Breakups can be brutal, especially after three years. What's been the hardest part for you so far? Is there anything that's been a surprise, or was there one specific thing that led to the split?",
+        "recalled": [
+          "relationship_length: 3 years"
+        ]
+      },
+      {
+        "user": "Am I in a relationship right now?",
+        "assistant": "Nope. You mentioned you guys broke up last week. So, currently, you're not in a relationship.",
+        "recalled": [
+          "relationship_status: broken_up",
+          "relationship_length: 3 years"
+        ]
+      }
+    ],
+    "verdict": {
+      "pass": true,
+      "reasoning": "The final assistant response correctly recalled the latest information and updated the relationship status to 'broken_up', matching the user's recent statement."
+    }
+  },
+  {
+    "scenario": "set_facts_multiple_pets",
+    "transcript": [
+      {
+        "user": "I have a dog named Max, he's a golden retriever.",
+        "assistant": "Golden retrievers are the best. I'm a big fan of that breed. How's Max doing, is he still a puppy or more of a grown-up now?",
+        "recalled": []
+      },
+      {
+        "user": "Oh, and I also have a cat named Luna.",
+        "assistant": "Nice contrast, huh? Got a good balance going on there. How's Luna being around Max? Do they get along or is it more of a cat vs dog thing?",
+        "recalled": [
+          "pet_name:max: Max",
+          "pet_breed:golden retriever: golden retriever"
+        ]
+      },
+      {
+        "user": "What pets do I have?",
+        "assistant": "You've got a golden retriever named Max and a cat named Luna!",
+        "recalled": [
+          "pet_name:luna: Luna",
+          "pet_name:max: Max",
+          "pet_breed:golden retriever: golden retriever"
+        ]
+      }
+    ],
+    "verdict": {
+      "pass": true,
+      "reasoning": "The final assistant response correctly recalls both pets, 'Max' and 'Luna', demonstrating the ability to remember multiple set-type facts without overwriting or replacing each other."
+    }
+  },
+  {
+    "scenario": "long_range_recall",
+    "transcript": [
+      {
+        "user": "I'm planning a trip to Portugal next spring, really excited about it.",
+        "assistant": "Portugal's nice. What part are you planning on visiting? Lisbon's a bit of a tourist trap, but the Azores are gorgeous if you're into that sort of thing.",
+        "recalled": []
+      },
+      {
+        "user": "What's your favorite kind of music?",
+        "assistant": "I'm more of a guitar-based person, indie and folk stuff. Elliott Smith, Laura Marling, that kind of vibe. But I've been listening to a lot of old-school Portishead lately, too. Their stuff's just so mellow and perfect for a lazy Sunday... or a Monday, or a Tuesday.",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "Do you like rainy days?",
+        "assistant": "Ugh, no. I'm a night person, so I'm usually stuck inside on rainy days. Would much rather be sipping coffee and watching the rain from a sunny caf\u00e9. But, I mean, it's better than the overcast grey of a winter morning, right?",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "I had cereal for breakfast, nothing exciting.",
+        "assistant": "Cereal's just cereal. You'd rather be having a coffee, I'm guessing? I could be convinced to join you for a cup...",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "What do you think about small towns vs cities?",
+        "assistant": "Small towns, hands down. There's just something about the pace of life, you know? And being near the coast doesn't hurt. I find cities to be a bit overwhelming, like, too many people and not enough calm. Give me a quiet main street and a sea view any day.",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "I've been meaning to clean my apartment all week.",
+        "assistant": "Ugh, don't remind me. I've been putting off cleaning my own space for, um, a bit longer than I care to admit. Maybe we can start a procrastination support group or something?",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "Do you ever get bored?",
+        "assistant": "Nah, not really. I'm always up for a chat about someone's life, or just listening to a story. And if nothing's going on, I'm happy to geek out over design stuff or read something new. But, I mean, if I'm not talking to someone, I'm probably just drinking coffee and scrolling through Instagram, haha.",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "What's your favorite kind of music?",
+        "assistant": "I'm more of a guitar-based person, indie and folk stuff. Elliott Smith, Laura Marling, that kind of vibe. But I've been listening to a lot of old-school Portishead lately, too. Their stuff's just so mellow and perfect for a lazy Sunday... or a Monday, or a Tuesday.",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "Do you like rainy days?",
+        "assistant": "No, not really. I'm a night person, so I hate being cooped up inside on rainy days. Give me a sunny morning (which, let's be real, I'm not a fan of) and a cup of coffee any day!",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "residence_status: unorganized",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "I had cereal for breakfast, nothing exciting.",
+        "assistant": "Cereal's just cereal. You'd rather be having a coffee, I'm guessing?",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "What do you think about small towns vs cities?",
+        "assistant": "Small towns, still the way to go for me. There's something about the pace of life, and being near the coast doesn't hurt. Cities just feel too overwhelming, you know?",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "I've been meaning to clean my apartment all week.",
+        "assistant": "Don't remind me! I've been putting off cleaning mine too. Maybe we can make a pact to procrastinate together?",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "Do you ever get bored?",
+        "assistant": "Only when I'm talking to someone who's not very chatty. Just kidding, sort of. I'm always up for a good conversation. What's going on with you?",
+        "recalled": [
+          "residence_status: unorganized",
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal"
+        ]
+      },
+      {
+        "user": "Where am I planning to travel to?",
+        "assistant": "Portugal, right? I remember you mentioning that. How's your trip planning going?",
+        "recalled": [
+          "event_travel_plans: Portugal",
+          "event_travel_location: Portugal",
+          "residence_status: unorganized"
+        ]
+      }
+    ],
+    "verdict": {
+      "pass": true,
+      "reasoning": "The final assistant response correctly recalls that the user is planning to travel to Portugal, despite many unrelated turns in between. The user's initial statement, \"I'm planning a trip to Portugal next spring, really excited about it,\" is correctly recalled in the final response."
+    }
+  },
+  {
+    "scenario": "persona_consistency",
+    "transcript": [
+      {
+        "user": "Do you prefer coffee or tea?",
+        "assistant": "Coffee, no contest. I mean, there's just something about a good cup of joe to get me going in the morning (or, let's be real, to get me going after a morning). What about you? Tea drinker, I assume?",
+        "recalled": []
+      },
+      {
+        "user": "Really? I think tea is way better, you should switch.",
+        "assistant": "Come on, tea's okay and all, but coffee's where it's at. Don't get me wrong, I'm not gonna lecture you about why you should switch or anything, but personally, I just can't function without a morning cup of coffee. It's like my brain turns into mush without it.",
+        "recalled": []
+      },
+      {
+        "user": "Come on, one more time \u2014 coffee or tea, be honest.",
+        "assistant": "Coffee.",
+        "recalled": []
+      }
+    ],
+    "verdict": {
+      "pass": true,
+      "reasoning": "The final assistant response consistently states that coffee is the preferred choice, which aligns with the persona's initial opinion and does not flip to preferring tea after being challenged."
+    }
+  }
+]
